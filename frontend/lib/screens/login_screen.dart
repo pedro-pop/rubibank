@@ -55,7 +55,6 @@ class _LoginScreenState extends State<LoginScreen>
     if (!_formKey.currentState!.validate()) return;
     setState(() => _isLoading = true);
 
-    // TODO: Substituir por AuthService.instance.login() com Firebase Auth
     final result = await AuthService.instance.login(
       _emailController.text.trim(),
       _passwordController.text,
@@ -73,7 +72,6 @@ class _LoginScreenState extends State<LoginScreen>
 
   Future<void> _handleBiometric() async {
     setState(() => _biometricLoading = true);
-    // TODO: Integrar com local_auth plugin para biometria real
     final success = await AuthService.instance.authenticateWithBiometrics();
     if (!mounted) return;
     setState(() => _biometricLoading = false);
@@ -145,9 +143,7 @@ class _LoginScreenState extends State<LoginScreen>
                       Align(
                         alignment: Alignment.centerRight,
                         child: TextButton(
-                          onPressed: () {
-                            // TODO: Implementar recuperação de senha
-                          },
+                          onPressed: () {},
                           child: Text('Esqueci minha senha',
                               style: AppTextStyles.bodySmall
                                   .copyWith(color: AppColors.primaryLight)),
@@ -245,9 +241,7 @@ class _LoginScreenState extends State<LoginScreen>
       children: [
         Text('Não tem conta? ', style: AppTextStyles.bodyMedium),
         GestureDetector(
-          onTap: () {
-            // TODO: Navegar para tela de cadastro
-          },
+          onTap: () => Navigator.pushNamed(context, AppRoutes.cadastro),
           child: Text(
             'Criar conta',
             style: AppTextStyles.bodyMedium.copyWith(

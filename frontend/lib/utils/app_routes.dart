@@ -4,6 +4,7 @@ import '../screens/home_screen.dart';
 import '../screens/cotacao_screen.dart';
 import '../screens/transferencia_screen.dart';
 import '../screens/perfil_screen.dart';
+import '../screens/cadastro_screen.dart';
 import '../models/transfer_args.dart';
 
 class AppRoutes {
@@ -14,26 +15,23 @@ class AppRoutes {
   static const String cotacao = '/cotacao';
   static const String transferencia = '/transferencia';
   static const String perfil = '/perfil';
+  static const String cadastro = '/cadastro';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
       case login:
         return _buildRoute(const LoginScreen(), settings);
-
       case home:
         return _buildRoute(const HomeScreen(), settings);
-
       case cotacao:
         return _buildRoute(const CotacaoScreen(), settings);
-
       case transferencia:
-        // Rota com argumentos (TransferArgs pode ser passado opcionalmente)
         final args = settings.arguments as TransferArgs?;
         return _buildRoute(TransferenciaScreen(args: args), settings);
-
       case perfil:
         return _buildRoute(const PerfilScreen(), settings);
-
+      case cadastro:
+        return _buildRoute(const CadastroScreen(), settings);
       default:
         return _buildRoute(
           Scaffold(
@@ -55,7 +53,8 @@ class AppRoutes {
         const begin = Offset(1.0, 0.0);
         const end = Offset.zero;
         const curve = Curves.easeInOutCubic;
-        final tween = Tween(begin: begin, end: end).chain(CurveTween(curve: curve));
+        final tween = Tween(begin: begin, end: end)
+            .chain(CurveTween(curve: curve));
         return SlideTransition(position: animation.drive(tween), child: child);
       },
       transitionDuration: const Duration(milliseconds: 300),
