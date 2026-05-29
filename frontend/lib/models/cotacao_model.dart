@@ -25,3 +25,4 @@ class CotacaoModel {
         lastUpdate: DateTime.now(),
       );
 }
+

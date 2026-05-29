@@ -19,13 +19,13 @@ Future<Response> _onPost(RequestContext context) async{
 
    final  authenticator = context.read<UserRepository>();
 
-   final user = authenticator.findByEmailAndPassword(email, password);
+   final user = await authenticator.findByEmailAndPassword(email, password);
 
    if (user == null){
     return Response(statusCode: HttpStatus.unauthorized);
    } else {
     return Response.json(
-      body: {'token': authenticator.generateToken(email, user)});
+      body: {'token':  authenticator.generateToken(email, user)});
    }
 }
 

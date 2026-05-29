@@ -5,13 +5,13 @@ class UserService{
   final UserRepository userRepository;
   UserService(this.userRepository);
 
-  User registerUser(String name, String email, String password, String cpf, String telefone, int saldo_conta){
-    var user = this.userRepository.createUser(name, email, password, cpf, telefone);
+  Future<User> registerUser(String name, String email, String password, String cpf, String telefone, int saldo_conta) async{
+    var user = await userRepository.createUser(name, email, password, cpf, telefone);
     return user;
   }
 
-  List<Map<String, dynamic>> findAllUsers(){
-    var users = this.userRepository.listUsers();
+  Future<List<Map<String, dynamic>>> findAllUsers() async{
+    var users = await this.userRepository.listUsers();
     return users;
   }
 
