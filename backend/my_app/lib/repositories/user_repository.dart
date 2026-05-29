@@ -152,37 +152,6 @@ class UserRepository {
     }
   }
 
-<<<<<<< HEAD
-  String generateToken( String email, User user){
-    final jwt = JWT({
-      'id':user.id,
-      'name':user.name,
-      'email':email
-    });
-
-    return jwt.sign(SecretKey('123'));
-  }
-
-  User? findByEmail(String email){
-    String sql = '''
-SELECT * FROM users WHERE email = ?''';
-    final user = db.select(sql, [email]);
-
-    if (user.isEmpty){
-      return null;
-    }
-    return  User(
-      id: user.first["id"] as int,
-      name: user.first["name"] as String,
-      password: user.first["password"] as String,
-      email: user.first["email"] as String,
-      cpf: user.first["cpf"] as String,
-      telefone: user.first["telefone"] as String,
-      saldo_conta: user.first["saldo_conta"] as int
-      );
-  }
-}
-=======
   String generateToken(String email, User user) {
 
     final jwt = JWT({
@@ -254,4 +223,3 @@ SELECT * FROM users WHERE email = ?''';
     return newBalance;
   }
 }
->>>>>>> feat/alteracao_bd
