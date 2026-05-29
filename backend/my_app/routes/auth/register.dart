@@ -18,7 +18,7 @@ Future<Response> onRequest(RequestContext context) async{
   
   switch (context.request.method){
     case HttpMethod.post:
-      User user = userService.registerUser(name, email, password, cpf, telefone, 0);
+      User user = await userService.registerUser(name, email, password, cpf, telefone, 0);
       return Response.json(statusCode: 201, body: user.UserToUserResponse());
     default:
       return Response(statusCode: HttpStatus.methodNotAllowed);
