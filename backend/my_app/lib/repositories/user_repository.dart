@@ -152,7 +152,7 @@ class UserRepository {
     }
   }
 
-  String generateToken(String email, User user) {
+  Future<String> generateToken(String email, User user) async {
 
     final jwt = JWT({
       'id': user.id,
@@ -165,7 +165,7 @@ class UserRepository {
     );
   }
 
-  Future<int?> findSaldoConta(id_user) async {
+  Future<int?> findSaldoConta(int id_user) async {
     final result = await db.execute(
       Sql(r'''
         SELECT saldo_conta
