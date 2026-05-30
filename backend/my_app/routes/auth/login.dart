@@ -1,7 +1,7 @@
 import 'dart:io';
 
 import 'package:dart_frog/dart_frog.dart';
-import 'package:my_app/repositories/user_repository.dart';
+import 'package:my_app/services/auth_service.dart';
 
 Future<Response> onRequest(RequestContext context) async{
   return switch (context.request.method){
@@ -17,7 +17,7 @@ Future<Response> _onPost(RequestContext context) async{
    final email = body["email"] as String;
    final password = body["password"] as String;
 
-   final  authenticator = context.read<UserRepository>();
+   final  authenticator = await context.read<Future<AuthService>>();
 
    final user = await authenticator.findByEmailAndPassword(email, password);
 
@@ -25,7 +25,7 @@ Future<Response> _onPost(RequestContext context) async{
     return Response(statusCode: HttpStatus.unauthorized);
    } else {
     return Response.json(
-      body: {'token':  authenticator.generateToken(email, user)});
+      body: {'token':  await authenticator.generateToken(email, user)});
    }
 }
 
