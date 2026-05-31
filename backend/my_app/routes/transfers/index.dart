@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:dart_frog/dart_frog.dart';
+import 'package:my_app/exceptions/user_not_found.dart';
 import 'package:my_app/models/user.dart';
 import 'package:my_app/services/transfers_service.dart';
 
@@ -14,16 +15,27 @@ Future<Response> onRequest(RequestContext context) async{
 }
 
 Future<Response> _onPost(RequestContext context) async{
-  final transfersService = context.read<TransfersService>();
-  final user = context.read<User>();
+  try{
+    final transfersService = context.read<TransfersService>();
+    final user = context.read<User>();
 
-  final body = await context.request.json() as Map<String, dynamic>;
+    final body = await context.request.json() as Map<String, dynamic>;
 
-  final email_destinatario = body["email_destinatario"] as String ;
-  final valor_transferencia = body["valor_transferencia"] as int;
-  final password = body["password"] as String;
+    final email_destinatario = body["email_destinatario"] as String ;
+    final valor_transferencia = body["valor_transferencia"] as int;
+    final password = body["password"] as String;
+    final saldo_conta =  await transfersService.Transfer(user.id, email_destinatario, valor_transferencia, password);
 
-  final saldo_conta =  await transfersService.Transfer(user.id, email_destinatario, valor_transferencia, password);
+    return Response.json(statusCode: HttpStatus.ok, body: {"saldo_conta":saldo_conta});
 
-  return Response.json(statusCode: HttpStatus.ok, body: {"saldo_conta":saldo_conta});
+  } on AppException catch (e){
+    return Response.json(statusCode:e.statusCode , body: {"message": e.message});
+
+  } catch (e, stackTrace) {
+    print(e);
+    print(stackTrace);
+
+    return Response.json(statusCode: HttpStatus.internalServerError, body: {"message": "erro interno no servidor"});
+  }
+
 }

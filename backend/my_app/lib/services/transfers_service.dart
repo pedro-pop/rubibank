@@ -16,7 +16,7 @@ class TransfersService {
 
   Future<int?> Transfer(int id_remetente, String email_destinatario, int valor, String password) async{
     User? user_destinatario = await _userRepository.findByEmail(email_destinatario);
-
+    
     if (user_destinatario == null){
       return null;
     }

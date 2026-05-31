@@ -1,4 +1,5 @@
 import 'package:dart_jsonwebtoken/dart_jsonwebtoken.dart';
+import 'package:my_app/exceptions/user_not_found.dart';
 import 'package:postgres/postgres.dart';
 
 import 'package:my_app/database/connection.dart';
@@ -82,7 +83,7 @@ class UserRepository {
     );
 
     if (result.isEmpty) {
-      return null;
+      throw ErrUserNotFound();
     }
 
     final userData = result.first.toColumnMap();
@@ -114,7 +115,7 @@ class UserRepository {
     );
 
     if (result.isEmpty) {
-      return null;
+      throw ErrUserNotFound();
     }
 
     final userData = result.first.toColumnMap();

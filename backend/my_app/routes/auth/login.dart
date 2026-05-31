@@ -17,6 +17,10 @@ Future<Response> _onPost(RequestContext context) async{
    final email = body["email"] as String;
    final password = body["password"] as String;
 
+   if (email == '' || password == ''){
+    return Response.json(statusCode: HttpStatus.badRequest,body: {'message': 'Informe E-mail e senha'} );
+   } 
+
    final  authenticator = await context.read<Future<AuthService>>();
 
    final user = await authenticator.findByEmailAndPassword(email, password);
