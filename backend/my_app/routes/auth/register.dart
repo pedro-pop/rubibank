@@ -22,6 +22,10 @@ Future<Response> _onPost(RequestContext context) async{
   final cpf = body['cpf'] as String;
   final telefone = body['telefone'] as String;
 
+  if (name == '' || email == '' || password == '' || cpf == '' || telefone == ''){
+    return Response.json(statusCode: HttpStatus.badRequest, body: {'message': 'Informe todos os seguintes dados: nome, E-mail, senha, cpf e telefone'});
+  }
+
   final user = await userService.registerUser(name, email, password, cpf, telefone, 0);
   return Response.json(statusCode: 201, body: user.UserToUserResponse());
 
