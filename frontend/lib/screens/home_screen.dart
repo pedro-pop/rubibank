@@ -3,6 +3,10 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/transaction.dart';
 import '../services/mock_data_service.dart';
+import '../services/api_service.dart';
+import '../services/auth_service.dart';
+import '../screens/relatorios_screen.dart';
+import '../screens/cartao_screen.dart';
 import '../utils/app_colors.dart';
 import '../utils/app_routes.dart';
 import '../utils/app_text_styles.dart';
@@ -26,11 +30,19 @@ class _HomeScreenState extends State<HomeScreen>
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
 
-  final _user = MockDataService.currentUser;
+  double _saldoBRL = 0;
+  bool _loadingSaldo = true;
+  bool _loadingTransactions = true;
+  List<Transaction> _transactions = [];
+
   final _cotacao = MockDataService.cotacao;
-  final _transactions = MockDataService.transactions;
   final _weekExpenses = MockDataService.weeklyExpenses;
   final _weekDays = MockDataService.weekDays;
+
+  String get _userName {
+    final email = AuthService.instance.userEmail ?? '';
+    return email.split('@').first;
+  }
 
   @override
   void initState() {
@@ -40,6 +52,40 @@ class _HomeScreenState extends State<HomeScreen>
     _fadeAnim = Tween<double>(begin: 0.0, end: 1.0)
         .animate(CurvedAnimation(parent: _animController, curve: Curves.easeOut));
     _animController.forward();
+    _loadData();
+  }
+
+  Future<void> _loadData() async {
+    final saldoResult = await ApiService.instance.getSaldo();
+    if (mounted) {
+      setState(() {
+        _saldoBRL = saldoResult.success
+            ? (saldoResult.data ?? 0).toDouble()
+            : MockDataService.currentUser.balance;
+        _loadingSaldo = false;
+      });
+    }
+
+    final transResult = await ApiService.instance.getTransactions();
+    if (mounted) {
+      setState(() {
+        if (transResult.success && transResult.data != null && transResult.data!.isNotEmpty) {
+          _transactions = transResult.data!.map((t) => Transaction(
+            id: t['id'].toString(),
+            title: t['type'] ?? 'Transação',
+            description: t['description'] ?? '',
+            amount: (t['value'] as num).toDouble(),
+            date: DateTime.tryParse(t['created_at'] ?? '') ?? DateTime.now(),
+            type: (t['value'] as num) > 0
+                ? TransactionType.income
+                : TransactionType.expense,
+          )).toList();
+        } else {
+          _transactions = MockDataService.transactions;
+        }
+        _loadingTransactions = false;
+      });
+    }
   }
 
   @override
@@ -56,8 +102,8 @@ class _HomeScreenState extends State<HomeScreen>
         index: _currentIndex,
         children: [
           _buildHomeTab(),
-          _buildPlaceholderTab(Icons.bar_chart_rounded, 'Relatórios'),
-          _buildPlaceholderTab(Icons.credit_card_rounded, 'Cartões'),
+          const RelatoriosScreen(),
+          const CartaoScreen(),
           const _PerfilTabShell(),
         ],
       ),
@@ -68,37 +114,58 @@ class _HomeScreenState extends State<HomeScreen>
   Widget _buildHomeTab() {
     return FadeTransition(
       opacity: _fadeAnim,
-      child: CustomScrollView(
-        slivers: [
-          _buildAppBar(),
-          SliverPadding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            sliver: SliverList(
-              delegate: SliverChildListDelegate([
-                const SizedBox(height: 8),
-                BalanceCard(
-                  brl: _user.balance,
-                  usd: MockDataService.balanceUSD,
-                  eur: MockDataService.balanceEUR,
-                ),
-                const SizedBox(height: 24),
-                _buildQuickActions(),
-                const SizedBox(height: 24),
-                _buildInsightCard(),
-                const SizedBox(height: 24),
-                SavingsProgressCard(
-                  current: MockDataService.savingsGoalCurrent,
-                  target: MockDataService.savingsGoalTarget,
-                ),
-                const SizedBox(height: 24),
-                _buildWeeklyChart(),
-                const SizedBox(height: 24),
-                _buildTransactionsList(),
-                const SizedBox(height: 40),
-              ]),
+      child: RefreshIndicator(
+        onRefresh: _loadData,
+        color: AppColors.primary,
+        child: CustomScrollView(
+          slivers: [
+            _buildAppBar(),
+            SliverPadding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  const SizedBox(height: 8),
+                  _loadingSaldo
+                      ? _buildLoadingCard()
+                      : BalanceCard(
+                          brl: _saldoBRL,
+                          usd: _saldoBRL / _cotacao.usdBrl,
+                          eur: _saldoBRL / _cotacao.eurBrl,
+                        ),
+                  const SizedBox(height: 24),
+                  _buildQuickActions(),
+                  const SizedBox(height: 24),
+                  _buildInsightCard(),
+                  const SizedBox(height: 24),
+                  SavingsProgressCard(
+                    current: MockDataService.savingsGoalCurrent,
+                    target: MockDataService.savingsGoalTarget,
+                  ),
+                  const SizedBox(height: 24),
+                  _buildWeeklyChart(),
+                  const SizedBox(height: 24),
+                  _buildTransactionsList(),
+                  const SizedBox(height: 40),
+                ]),
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLoadingCard() {
+    return Container(
+      height: 160,
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(24),
+      ),
+      child: const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+        ),
       ),
     );
   }
@@ -118,8 +185,7 @@ class _HomeScreenState extends State<HomeScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                Text('Olá, ${_user.firstName} 👋',
-                    style: AppTextStyles.headlineLarge),
+                Text('Olá, $_userName 👋', style: AppTextStyles.headlineLarge),
                 Text(AppFormatters.formatDate(DateTime.now()),
                     style: AppTextStyles.bodySmall),
               ],
@@ -128,8 +194,7 @@ class _HomeScreenState extends State<HomeScreen>
             GestureDetector(
               onTap: () => Navigator.pushNamed(context, AppRoutes.perfil),
               child: Container(
-                width: 44,
-                height: 44,
+                width: 44, height: 44,
                 decoration: BoxDecoration(
                   gradient: AppColors.primaryGradient,
                   borderRadius: BorderRadius.circular(14),
@@ -143,7 +208,7 @@ class _HomeScreenState extends State<HomeScreen>
                 ),
                 child: Center(
                   child: Text(
-                    _user.firstName[0].toUpperCase(),
+                    _userName.isNotEmpty ? _userName[0].toUpperCase() : 'U',
                     style: GoogleFonts.poppins(
                       fontSize: 18,
                       fontWeight: FontWeight.w700,
@@ -182,17 +247,12 @@ class _HomeScreenState extends State<HomeScreen>
             QuickActionButton(
               icon: Icons.share_rounded,
               label: 'Compartilhar',
-              onTap: () {
-                // TODO: Integrar plugin share_plus
-                _showShareDialog();
-              },
+              onTap: () => _showShareDialog(),
             ),
             QuickActionButton(
               icon: Icons.qr_code_rounded,
               label: 'Pix',
-              onTap: () {
-                // TODO: Implementar Pix
-              },
+              onTap: () {},
             ),
           ],
         ),
@@ -211,8 +271,7 @@ class _HomeScreenState extends State<HomeScreen>
       child: Row(
         children: [
           Container(
-            width: 40,
-            height: 40,
+            width: 40, height: 40,
             decoration: BoxDecoration(
               color: AppColors.primary.withOpacity(0.2),
               borderRadius: BorderRadius.circular(12),
@@ -226,12 +285,10 @@ class _HomeScreenState extends State<HomeScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Insight da semana',
-                    style: AppTextStyles.caption
-                        .copyWith(color: AppColors.primaryLight)),
+                    style: AppTextStyles.caption.copyWith(color: AppColors.primaryLight)),
                 const SizedBox(height: 2),
                 Text('Você gastou mais essa semana comparado à anterior.',
-                    style: AppTextStyles.bodySmall
-                        .copyWith(color: Colors.white70)),
+                    style: AppTextStyles.bodySmall.copyWith(color: Colors.white70)),
               ],
             ),
           ),
@@ -256,8 +313,7 @@ class _HomeScreenState extends State<HomeScreen>
             children: [
               Text('Gastos da semana', style: AppTextStyles.titleMedium),
               Text('Esta semana',
-                  style: AppTextStyles.caption
-                      .copyWith(color: AppColors.primaryLight)),
+                  style: AppTextStyles.caption.copyWith(color: AppColors.primaryLight)),
             ],
           ),
           const SizedBox(height: 20),
@@ -274,20 +330,16 @@ class _HomeScreenState extends State<HomeScreen>
                     getTooltipItem: (group, groupIndex, rod, rodIndex) {
                       return BarTooltipItem(
                         'R\$ ${rod.toY.toStringAsFixed(0)}',
-                        AppTextStyles.caption
-                            .copyWith(color: AppColors.primaryLight),
+                        AppTextStyles.caption.copyWith(color: AppColors.primaryLight),
                       );
                     },
                   ),
                 ),
                 titlesData: FlTitlesData(
                   show: true,
-                  topTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
-                  leftTitles: const AxisTitles(
-                      sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
@@ -296,8 +348,7 @@ class _HomeScreenState extends State<HomeScreen>
                         if (idx >= 0 && idx < _weekDays.length) {
                           return Padding(
                             padding: const EdgeInsets.only(top: 6),
-                            child: Text(_weekDays[idx],
-                                style: AppTextStyles.caption),
+                            child: Text(_weekDays[idx], style: AppTextStyles.caption),
                           );
                         }
                         return const SizedBox.shrink();
@@ -309,15 +360,12 @@ class _HomeScreenState extends State<HomeScreen>
                   show: true,
                   drawVerticalLine: false,
                   horizontalInterval: 200,
-                  getDrawingHorizontalLine: (value) => FlLine(
-                    color: AppColors.surfaceLight,
-                    strokeWidth: 0.5,
-                  ),
+                  getDrawingHorizontalLine: (value) =>
+                      FlLine(color: AppColors.surfaceLight, strokeWidth: 0.5),
                 ),
                 borderData: FlBorderData(show: false),
                 barGroups: _weekExpenses.asMap().entries.map((e) {
-                  final isMax = e.value ==
-                      _weekExpenses.reduce((a, b) => a > b ? a : b);
+                  final isMax = e.value == _weekExpenses.reduce((a, b) => a > b ? a : b);
                   return BarChartGroupData(
                     x: e.key,
                     barRods: [
@@ -325,17 +373,13 @@ class _HomeScreenState extends State<HomeScreen>
                         toY: e.value,
                         gradient: isMax
                             ? AppColors.primaryGradient
-                            : LinearGradient(
-                                colors: [
-                                  AppColors.surfaceLight,
-                                  AppColors.surfaceCard
-                                ],
+                            : const LinearGradient(
+                                colors: [AppColors.surfaceLight, AppColors.surfaceCard],
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                               ),
                         width: 22,
-                        borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(8)),
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
                       ),
                     ],
                   );
@@ -357,51 +401,48 @@ class _HomeScreenState extends State<HomeScreen>
           children: [
             Text('Transações recentes', style: AppTextStyles.titleLarge),
             TextButton(
-              onPressed: () {},
+              onPressed: () => setState(() => _currentIndex = 1),
               child: Text('Ver todas',
-                  style: AppTextStyles.bodySmall
-                      .copyWith(color: AppColors.primaryLight)),
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.primaryLight)),
             ),
           ],
         ),
         const SizedBox(height: 8),
-        ..._transactions.map((t) => TransactionTile(transaction: t)),
+        if (_loadingTransactions)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary)),
+            ),
+          )
+        else if (_transactions.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text('Nenhuma transação encontrada.',
+                  style: AppTextStyles.bodyMedium),
+            ),
+          )
+        else
+          ..._transactions.take(5).map((t) => TransactionTile(transaction: t)),
       ],
     );
   }
 
-  Widget _buildPlaceholderTab(IconData icon, String label) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: AppColors.surfaceLight, size: 52),
-          const SizedBox(height: 16),
-          Text(label, style: AppTextStyles.titleMedium),
-          const SizedBox(height: 8),
-          Text('Em breve', style: AppTextStyles.bodySmall),
-        ],
-      ),
-    );
-  }
-
   void _showShareDialog() {
-    // TODO: Substituir por share_plus plugin
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppColors.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Compartilhar', style: AppTextStyles.headlineMedium),
-        content: Text(
-          'Plugin de compartilhamento será integrado aqui.',
-          style: AppTextStyles.bodyMedium,
-        ),
+        content: Text('Plugin de compartilhamento será integrado aqui.',
+            style: AppTextStyles.bodyMedium),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Fechar',
-                style: TextStyle(color: AppColors.primaryLight)),
+            child: const Text('Fechar', style: TextStyle(color: AppColors.primaryLight)),
           ),
         ],
       ),
@@ -412,8 +453,7 @@ class _HomeScreenState extends State<HomeScreen>
     return Container(
       decoration: BoxDecoration(
         color: AppColors.surface,
-        border: const Border(
-            top: BorderSide(color: AppColors.surfaceLight, width: 0.5)),
+        border: const Border(top: BorderSide(color: AppColors.surfaceLight, width: 0.5)),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.3),
@@ -430,56 +470,41 @@ class _HomeScreenState extends State<HomeScreen>
         type: BottomNavigationBarType.fixed,
         selectedItemColor: AppColors.primary,
         unselectedItemColor: AppColors.textHint,
-        selectedLabelStyle: GoogleFonts.poppins(
-            fontSize: 11, fontWeight: FontWeight.w600),
-        unselectedLabelStyle:
-            GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w400),
+        selectedLabelStyle: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w600),
+        unselectedLabelStyle: GoogleFonts.poppins(fontSize: 11, fontWeight: FontWeight.w400),
         items: const [
-          BottomNavigationBarItem(
-              icon: Icon(Icons.home_rounded), label: 'Início'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.bar_chart_rounded), label: 'Relatórios'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.credit_card_rounded), label: 'Cartões'),
-          BottomNavigationBarItem(
-              icon: Icon(Icons.person_rounded), label: 'Perfil'),
+          BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Início'),
+          BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded), label: 'Relatórios'),
+          BottomNavigationBarItem(icon: Icon(Icons.credit_card_rounded), label: 'Cartões'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Perfil'),
         ],
       ),
     );
   }
 }
 
-// Shell que navega para a tela de perfil real
 class _PerfilTabShell extends StatelessWidget {
   const _PerfilTabShell();
-
   @override
-  Widget build(BuildContext context) {
-    return const _PerfilTabEmbed();
-  }
+  Widget build(BuildContext context) => const _PerfilTabEmbed();
 }
 
 class _PerfilTabEmbed extends StatelessWidget {
   const _PerfilTabEmbed();
-
   @override
   Widget build(BuildContext context) {
-    // Embed inline para não quebrar o IndexedStack
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(Icons.person_rounded,
-              color: AppColors.surfaceLight, size: 52),
+          const Icon(Icons.person_rounded, color: AppColors.surfaceLight, size: 52),
           const SizedBox(height: 16),
           Text('Perfil', style: AppTextStyles.titleMedium),
           const SizedBox(height: 12),
           TextButton.icon(
-            onPressed: () =>
-                Navigator.pushNamed(context, AppRoutes.perfil),
-            icon: const Icon(Icons.open_in_new_rounded,
-                color: AppColors.primaryLight, size: 18),
-            label: Text('Abrir perfil completo',
+            onPressed: () => Navigator.pushNamed(context, AppRoutes.perfil),
+            icon: const Icon(Icons.open_in_new_rounded, color: AppColors.primaryLight, size: 18),
+            label: const Text('Abrir perfil completo',
                 style: TextStyle(color: AppColors.primaryLight)),
           ),
         ],

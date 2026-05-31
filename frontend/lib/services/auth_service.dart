@@ -10,7 +10,7 @@ class AuthService {
   static final AuthService instance = AuthService._();
 
   // URL base da API — no emulador Android usar 10.0.2.2 no lugar de localhost
-  static const String _baseUrl = 'http://10.0.2.2:8080';
+  static const String _baseUrl = 'http://localhost:8080';
   static const String _tokenKey = 'jwt_token';
   static const String _userEmailKey = 'user_email';
   static const String _userNameKey = 'user_name';
