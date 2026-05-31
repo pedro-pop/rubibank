@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/transfer_args.dart';
+import '../services/api_service.dart';
+import '../services/auth_service.dart';
 import '../utils/app_colors.dart';
+import '../utils/app_routes.dart';
 import '../utils/app_text_styles.dart';
 import '../widgets/rubi_button.dart';
 import '../widgets/rubi_text_field.dart';
@@ -20,7 +23,7 @@ class _TransferenciaScreenState extends State<TransferenciaScreen>
   final _formKey = GlobalKey<FormState>();
   final _destinatarioController = TextEditingController();
   final _valorController = TextEditingController();
-  final _descricaoController = TextEditingController();
+  final _senhaController = TextEditingController();
 
   bool _isLoading = false;
 
@@ -41,11 +44,9 @@ class _TransferenciaScreenState extends State<TransferenciaScreen>
     );
     _animController.forward();
 
-    // Preenche campos se vieram via argumento de rota
     if (widget.args != null) {
       _destinatarioController.text = widget.args!.destinatario ?? '';
       _valorController.text = widget.args!.valor?.toString() ?? '';
-      _descricaoController.text = widget.args!.descricao ?? '';
     }
   }
 
@@ -54,32 +55,51 @@ class _TransferenciaScreenState extends State<TransferenciaScreen>
     _animController.dispose();
     _destinatarioController.dispose();
     _valorController.dispose();
-    _descricaoController.dispose();
+    _senhaController.dispose();
     super.dispose();
   }
 
   Future<void> _handleTransfer() async {
     if (!_formKey.currentState!.validate()) return;
-    // Mostra modal de confirmação primeiro
     final confirmed = await _showConfirmationModal();
     if (!confirmed) return;
 
-    // Mostra biometria simulada
     final biometricOk = await _showBiometricDialog();
     if (!biometricOk || !mounted) return;
 
     setState(() => _isLoading = true);
-    // TODO: Integrar com backend para realizar transferência real
-    await Future.delayed(const Duration(milliseconds: 1500));
+
+    final valor = int.tryParse(_valorController.text.replaceAll(',', '.')) ?? 0;
+
+    final result = await ApiService.instance.transfer(
+      emailDestinatario: _destinatarioController.text.trim(),
+      valor: valor,
+      password: _senhaController.text,
+    );
+
     if (!mounted) return;
     setState(() => _isLoading = false);
-    _showSuccessSheet();
+
+    if (result.success) {
+      _showSuccessSheet(result.data ?? 0);
+    } else {
+      _showError(result.errorMessage ?? 'Erro ao realizar transferência.');
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.error,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ),
+    );
   }
 
   Future<bool> _showConfirmationModal() async {
-    final destinatario = _destinatarioController.text;
-    final valor = _valorController.text;
-
     final result = await showModalBottomSheet<bool>(
       context: context,
       backgroundColor: Colors.transparent,
@@ -94,8 +114,7 @@ class _TransferenciaScreenState extends State<TransferenciaScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 40,
-              height: 4,
+              width: 40, height: 4,
               decoration: BoxDecoration(
                 color: AppColors.surfaceLight,
                 borderRadius: BorderRadius.circular(2),
@@ -103,8 +122,7 @@ class _TransferenciaScreenState extends State<TransferenciaScreen>
             ),
             const SizedBox(height: 24),
             Container(
-              width: 64,
-              height: 64,
+              width: 64, height: 64,
               decoration: BoxDecoration(
                 color: AppColors.primaryGlow,
                 borderRadius: BorderRadius.circular(20),
@@ -113,17 +131,20 @@ class _TransferenciaScreenState extends State<TransferenciaScreen>
                   color: AppColors.primaryLight, size: 32),
             ),
             const SizedBox(height: 20),
-            Text('Confirmar transferência',
-                style: AppTextStyles.headlineMedium),
+            Text('Confirmar transferência', style: AppTextStyles.headlineMedium),
             const SizedBox(height: 24),
-            _buildConfirmRow(
-                'Destinatário', destinatario),
+            _buildConfirmRow('Destinatário', _destinatarioController.text),
             const Divider(color: AppColors.surfaceLight, height: 24),
-            _buildConfirmRow('Valor', 'R\$ $valor'),
-            if (_descricaoController.text.isNotEmpty) ...[
-              const Divider(color: AppColors.surfaceLight, height: 24),
-              _buildConfirmRow('Descrição', _descricaoController.text),
-            ],
+            _buildConfirmRow('Valor', 'R\$ ${_valorController.text}'),
+            const SizedBox(height: 20),
+            // Campo de senha para confirmar
+            RubiTextField(
+              label: 'Sua senha',
+              hint: 'Digite sua senha para confirmar',
+              controller: _senhaController,
+              obscureText: true,
+              prefixIcon: Icons.lock_outline_rounded,
+            ),
             const SizedBox(height: 28),
             Row(
               children: [
@@ -168,9 +189,8 @@ class _TransferenciaScreenState extends State<TransferenciaScreen>
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(label, style: AppTextStyles.bodyMedium),
-        Text(value,
-            style: AppTextStyles.titleMedium.copyWith(
-                color: AppColors.primaryLight)),
+        Text(value, style: AppTextStyles.titleMedium
+            .copyWith(color: AppColors.primaryLight)),
       ],
     );
   }
@@ -187,12 +207,11 @@ class _TransferenciaScreenState extends State<TransferenciaScreen>
     return result ?? false;
   }
 
-  void _showSuccessSheet() {
+  void _showSuccessSheet(int novoSaldo) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
       isDismissible: false,
-      isScrollControlled: true,
       builder: (ctx) => Container(
         padding: const EdgeInsets.all(32),
         decoration: const BoxDecoration(
@@ -203,8 +222,7 @@ class _TransferenciaScreenState extends State<TransferenciaScreen>
           mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              width: 72,
-              height: 72,
+              width: 72, height: 72,
               decoration: BoxDecoration(
                 color: AppColors.success.withOpacity(0.15),
                 shape: BoxShape.circle,
@@ -213,21 +231,21 @@ class _TransferenciaScreenState extends State<TransferenciaScreen>
                   color: AppColors.success, size: 42),
             ),
             const SizedBox(height: 20),
-            Text('Transferência realizada!',
-                style: AppTextStyles.headlineLarge),
+            Text('Transferência realizada!', style: AppTextStyles.headlineLarge),
             const SizedBox(height: 8),
-            Text(
-              'Seu dinheiro foi enviado com sucesso.',
-              style: AppTextStyles.bodyMedium,
-              textAlign: TextAlign.center,
-            ),
+            Text('Seu dinheiro foi enviado com sucesso.',
+                style: AppTextStyles.bodyMedium, textAlign: TextAlign.center),
+            const SizedBox(height: 8),
+            Text('Novo saldo: R\$ $novoSaldo',
+                style: AppTextStyles.titleMedium
+                    .copyWith(color: AppColors.primaryLight)),
             const SizedBox(height: 32),
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
                 onPressed: () {
                   Navigator.pop(ctx);
-                  Navigator.pop(context);
+                  Navigator.pushReplacementNamed(context, AppRoutes.home);
                 },
                 child: const Text('Voltar ao início'),
               ),
@@ -263,44 +281,34 @@ class _TransferenciaScreenState extends State<TransferenciaScreen>
                 children: [
                   _buildContactsRow(),
                   const SizedBox(height: 28),
-                  Text('Dados da transferência',
-                      style: AppTextStyles.titleLarge),
+                  Text('Dados da transferência', style: AppTextStyles.titleLarge),
                   const SizedBox(height: 16),
                   RubiTextField(
-                    label: 'Destinatário',
-                    hint: 'Nome, CPF, email ou chave Pix',
+                    label: 'Email do destinatário',
+                    hint: 'email@exemplo.com',
                     controller: _destinatarioController,
-                    prefixIcon: Icons.person_outline_rounded,
-                    validator: (v) =>
-                        (v == null || v.isEmpty) ? 'Informe o destinatário' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  RubiTextField(
-                    label: 'Valor (R\$)',
-                    hint: '0,00',
-                    controller: _valorController,
-                    prefixIcon: Icons.attach_money_rounded,
-                    keyboardType:
-                        const TextInputType.numberWithOptions(decimal: true),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                          RegExp(r'^\d+\.?\d{0,2}')),
-                    ],
+                    keyboardType: TextInputType.emailAddress,
+                    prefixIcon: Icons.email_outlined,
                     validator: (v) {
-                      if (v == null || v.isEmpty) return 'Informe o valor';
-                      final amount = double.tryParse(v);
-                      if (amount == null || amount <= 0) {
-                        return 'Valor inválido';
-                      }
+                      if (v == null || v.isEmpty) return 'Informe o destinatário';
+                      if (!v.contains('@')) return 'Email inválido';
                       return null;
                     },
                   ),
                   const SizedBox(height: 16),
                   RubiTextField(
-                    label: 'Descrição (opcional)',
-                    hint: 'Ex: Aluguel, Presente...',
-                    controller: _descricaoController,
-                    prefixIcon: Icons.description_outlined,
+                    label: 'Valor (R\$)',
+                    hint: '0',
+                    controller: _valorController,
+                    prefixIcon: Icons.attach_money_rounded,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    validator: (v) {
+                      if (v == null || v.isEmpty) return 'Informe o valor';
+                      final amount = int.tryParse(v);
+                      if (amount == null || amount <= 0) return 'Valor inválido';
+                      return null;
+                    },
                   ),
                   const SizedBox(height: 32),
                   RubiButton(
@@ -340,24 +348,14 @@ class _TransferenciaScreenState extends State<TransferenciaScreen>
                 child: Column(
                   children: [
                     Container(
-                      width: 50,
-                      height: 50,
+                      width: 50, height: 50,
                       decoration: BoxDecoration(
                         gradient: AppColors.primaryGradient,
                         shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: AppColors.primary.withOpacity(0.25),
-                            blurRadius: 8,
-                            offset: const Offset(0, 3),
-                          )
-                        ],
                       ),
                       child: Center(
-                        child: Text(
-                          contacts[index][0],
-                          style: AppTextStyles.titleLarge,
-                        ),
+                        child: Text(contacts[index][0],
+                            style: AppTextStyles.titleLarge),
                       ),
                     ),
                     const SizedBox(height: 6),
@@ -403,8 +401,6 @@ class _BiometricDialogState extends State<_BiometricDialog>
     );
     _pulseController.repeat(reverse: true);
 
-    // Simula autenticação biométrica após 2s
-    // TODO: Substituir por local_auth plugin real
     Future.delayed(const Duration(milliseconds: 2000), () {
       if (!mounted) return;
       setState(() => _authenticated = true);
@@ -438,27 +434,20 @@ class _BiometricDialogState extends State<_BiometricDialog>
                   ? const AlwaysStoppedAnimation(1.0)
                   : _pulseAnim,
               child: Container(
-                width: 90,
-                height: 90,
+                width: 90, height: 90,
                 decoration: BoxDecoration(
                   color: _authenticated
                       ? AppColors.success.withOpacity(0.15)
                       : AppColors.primaryGlow,
                   shape: BoxShape.circle,
                   border: Border.all(
-                    color: _authenticated
-                        ? AppColors.success
-                        : AppColors.primary,
+                    color: _authenticated ? AppColors.success : AppColors.primary,
                     width: 2,
                   ),
                 ),
                 child: Icon(
-                  _authenticated
-                      ? Icons.check_rounded
-                      : Icons.fingerprint_rounded,
-                  color: _authenticated
-                      ? AppColors.success
-                      : AppColors.primaryLight,
+                  _authenticated ? Icons.check_rounded : Icons.fingerprint_rounded,
+                  color: _authenticated ? AppColors.success : AppColors.primaryLight,
                   size: 50,
                 ),
               ),
@@ -474,9 +463,8 @@ class _BiometricDialogState extends State<_BiometricDialog>
             if (!_authenticated)
               TextButton(
                 onPressed: widget.onCancelled,
-                child: Text('Cancelar',
-                    style:
-                        TextStyle(color: AppColors.textSecondary)),
+                child: const Text('Cancelar',
+                    style: TextStyle(color: AppColors.textSecondary)),
               ),
           ],
         ),
